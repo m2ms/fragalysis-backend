@@ -15,6 +15,8 @@ router.register(r"molecules", viewer_views.MoleculeView)
 router.register(r"compounds", viewer_views.CompoundView)
 router.register(r"targets", viewer_views.TargetView)
 router.register(r"proteins", viewer_views.ProteinView)
+# Register Projects
+router.register(r"projects", viewer_views.ProjectsView)
 # Get the derived data
 router.register(r"molimg", viewer_views.MolImageView)
 router.register(r"vector", viewer_views.VectorsView)
@@ -45,6 +47,7 @@ router.register(r"molgroup", score_views.MolGroupView)
 router.register(r"molannotation", score_views.MolAnnotationView)
 # fragspect
 router.register(r"fragspect", xcdb_views.FragspectCrystalView)
+
 
 
 from rest_framework_swagger.renderers import OpenAPIRenderer, SwaggerUIRenderer

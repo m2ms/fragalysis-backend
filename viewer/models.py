@@ -17,6 +17,9 @@ class Project(models.Model):
     class Meta:
         permissions = (("view_project", "View project"),)
 
+    def __str__(self):
+        return self.title
+
 
 class Target(models.Model):
     """A Django model to define a given protein target"""

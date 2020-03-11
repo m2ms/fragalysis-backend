@@ -5,8 +5,9 @@ from django.http import HttpResponse
 from django.shortcuts import render
 
 from api.security import ISpyBSafeQuerySet
+from rest_framework import viewsets
 from api.utils import get_params, get_highlighted_diffs
-from viewer.models import Molecule, Protein, Compound, Target
+from viewer.models import Molecule, Protein, Compound, Target, Project
 from viewer.serializers import (
     MoleculeSerializer,
     ProteinSerializer,
@@ -19,6 +20,7 @@ from viewer.serializers import (
     ProtPDBBoundInfoSerialzer,
     VectorsSerializer,
     GraphSerializer,
+    ProjectSerializer
 )
 
 
@@ -106,6 +108,21 @@ class ProteinView(ISpyBSafeQuerySet):
     filter_fields = ("code", "target_id", "prot_type")
 
 
+
+class ProjectsView(viewsets.ModelViewSet):
+    queryset = Project.objects.all().order_by('id')
+    serializer_class = ProjectSerializer
+   # filter_permissions = "target_id__project_id"
+   # filter_fields = (
+   #     "prot_id",
+ #       "cmpd_id",
+  #      "smiles",
+ #       "prot_id__target_id",
+  #      "mol_type",
+  #      "mol_groups",
+  #  )
+
+
 def react(request):
     """
     :param request:
@@ -165,3 +182,7 @@ def get_open_targets(request):
                 target_ids.append(t.id)
 
     return HttpResponse(json.dumps({'target_names': target_names, 'target_ids': target_ids}))
+
+
+def get_projects(request):
+     return HttpResponse("Response for Projects")

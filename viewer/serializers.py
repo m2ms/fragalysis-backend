@@ -150,7 +150,7 @@ class ProjectSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Project
-        fields = ("id", "title")
+        fields = ("id", "title", "init_date", "user_id")
 
 
 class MolImageSerialzier(serializers.ModelSerializer):
