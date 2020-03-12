@@ -4,7 +4,8 @@ from frag.network.query import get_full_graph
 from rest_framework import serializers
 
 from api.utils import draw_mol
-from viewer.models import ActivityPoint, Molecule, Project, Protein, Compound, Target
+from viewer.models import ActivityPoint, Molecule, Project, Protein, Compound, Target, Snapshot
+from django.contrib.auth.models import User
 
 
 class TargetSerializer(serializers.ModelSerializer):
@@ -19,7 +20,7 @@ class TargetSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Target
-        fields = ("id", "title", "project_id", "protein_set", "template_protein")
+        fields = '__all__'#("id", "title", "project_id", "protein_set", "template_protein")
 
 
 class CompoundSerializer(serializers.ModelSerializer):
@@ -146,11 +147,25 @@ class ProteinSerializer(serializers.ModelSerializer):
         )
 
 
-class ProjectSerializer(serializers.ModelSerializer):
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ('id', 'username', 'email', 'first_name', 'last_name')
 
+
+class SnapshotSerializer(serializers.ModelSerializer):
+    authorID  = UserSerializer(partial=True)
+    class Meta:
+        model = Snapshot
+        fields = '__all__'
+
+class ProjectSerializer(serializers.ModelSerializer):
+    targetID = TargetSerializer(partial=True)
+    authorID = UserSerializer(partial=True)
     class Meta:
         model = Project
-        fields = ("id", "title", "init_date", "user_id")
+        use_natural_foreign_keys=True,
+        fields = '__all__'
 
 
 class MolImageSerialzier(serializers.ModelSerializer):

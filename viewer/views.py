@@ -7,7 +7,7 @@ from django.shortcuts import render
 from api.security import ISpyBSafeQuerySet
 from rest_framework import viewsets
 from api.utils import get_params, get_highlighted_diffs
-from viewer.models import Molecule, Protein, Compound, Target, Project
+from viewer.models import Molecule, Protein, Compound, Target, Project, Snapshot
 from viewer.serializers import (
     MoleculeSerializer,
     ProteinSerializer,
@@ -20,7 +20,8 @@ from viewer.serializers import (
     ProtPDBBoundInfoSerialzer,
     VectorsSerializer,
     GraphSerializer,
-    ProjectSerializer
+    ProjectSerializer,
+    SnapshotSerializer
 )
 
 
@@ -73,11 +74,14 @@ class ProteinPDBBoundInfoView(ISpyBSafeQuerySet):
     filter_fields = ("code", "target_id", "prot_type")
 
 
-class TargetView(ISpyBSafeQuerySet):
-    queryset = Target.objects.filter()
+class TargetView(#ISpyBSafeQuerySet
+    viewsets.ModelViewSet):
+    queryset = Target.objects.all()
     serializer_class = TargetSerializer
-    filter_permissions = "project_id"
-    filter_fields = ("title",)
+    filter_permissions = "id"
+    filter_fields = '__all__'
+   # filter_permissions = "project_id"
+   # filter_fields = ("title",)
 
 
 class MoleculeView(ISpyBSafeQuerySet):
@@ -110,17 +114,17 @@ class ProteinView(ISpyBSafeQuerySet):
 
 
 class ProjectsView(viewsets.ModelViewSet):
-    queryset = Project.objects.all().order_by('id')
+    queryset = Project.objects.filter()
     serializer_class = ProjectSerializer
-   # filter_permissions = "target_id__project_id"
-   # filter_fields = (
-   #     "prot_id",
- #       "cmpd_id",
-  #      "smiles",
- #       "prot_id__target_id",
-  #      "mol_type",
-  #      "mol_groups",
-  #  )
+    filter_permissions = "target_id__project_id"
+    filter_fields = '__all__'
+
+
+class SnapshotsView(viewsets.ModelViewSet):
+    queryset = Snapshot.objects.filter()
+    serializer_class = SnapshotSerializer
+    filter_permissions = "target_id__project_id"
+    filter_fields = '__all__'
 
 
 def react(request):
@@ -182,7 +186,3 @@ def get_open_targets(request):
                 target_ids.append(t.id)
 
     return HttpResponse(json.dumps({'target_names': target_names, 'target_ids': target_ids}))
-
-
-def get_projects(request):
-     return HttpResponse("Response for Projects")
