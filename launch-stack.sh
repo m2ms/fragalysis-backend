@@ -18,6 +18,9 @@ else:
 "
 printf "$script" | python manage.py shell
 
+echo "upgrade fragalysis"
+pip install --upgrade fragalysis
+
 # Prepare log files and start outputting logs to stdout
 touch /srv/logs/gunicorn.log
 touch /srv/logs/access.log
