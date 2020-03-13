@@ -7,10 +7,30 @@ from api.utils import draw_mol
 from viewer.models import ActivityPoint, Molecule, Project, Protein, Compound, Target, Snapshot
 from django.contrib.auth.models import User
 
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ('id', 'username', 'email', 'first_name', 'last_name')
+
+
+# GET
+class ProjectReadSerializer(serializers.ModelSerializer):
+    project_target = serializers.SerializerMethodField()
+    author = UserSerializer()
+    class Meta:
+        model = Project
+        fields = '__all_'
+
+# (POST, PUT, PATCH)
+class ProjectSerializer(serializers.ModelSerializer):
+    project_target = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
+    class Meta:
+        model = Project
+        fields = '__all_'
 
 class TargetSerializer(serializers.ModelSerializer):
     template_protein = serializers.SerializerMethodField()
-
+    project_id = ProjectReadSerializer(many=True)
     def get_template_protein(self, obj):
         proteins = obj.protein_set.filter()
         for protein in proteins:
@@ -147,24 +167,11 @@ class ProteinSerializer(serializers.ModelSerializer):
         )
 
 
-class UserSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = User
-        fields = ('id', 'username', 'email', 'first_name', 'last_name')
-
-
-class ProjectSerializer(serializers.ModelSerializer):
-    target = TargetSerializer(partial=True)
-    author = UserSerializer(partial=True)
-    class Meta:
-        model = Project
-        use_natural_foreign_keys=True,
-        fields = '__all__'
 
 
 class SnapshotSerializer(serializers.ModelSerializer):
-    author  = UserSerializer(partial=True)
-    project  = ProjectSerializer(partial=True)
+    author  = UserSerializer()
+    project  = ProjectSerializer()
     class Meta:
         model = Snapshot
         use_natural_foreign_keys=True,

@@ -11,7 +11,7 @@ class Target(models.Model):
     # The date it was made
     init_date = models.DateTimeField(auto_now_add=True)
     # A field to link projects and targets together
- #   project_id = models.ManyToManyField('Project')
+    project_id = models.ManyToManyField('Project', related_name='project_target')
     # Indicates the uniprot_id id for the target. Is a unique key
     uniprot_id = models.CharField(max_length=100, null=True)
 
@@ -32,8 +32,8 @@ class Snapshot(models.Model):
     title = models.CharField(max_length=255)
     author = models.ForeignKey(User)
     description = models.CharField(max_length=255)
-    children = models.ManyToManyField('Snapshot' , null=True, related_name='+')
-    parent = models.ManyToManyField('Snapshot', null=True, related_name='+'),
+    children = models.ManyToManyField('Snapshot' , related_name='+')
+    parent = models.ManyToManyField('Snapshot', related_name='+'),
     created = models.DateTimeField(default=timezone.now)
     data = models.TextField()
     project = models.ForeignKey('Project')
@@ -49,12 +49,13 @@ class Project(models.Model):
     # The date it was made
     init_date = models.DateTimeField(default=timezone.now)
 
-    description = models.CharField(max_length=255)
+    description = models.CharField(max_length=255, default='')
 
-    target = models.ForeignKey(Target)
+    #target = models.ForeignKey(Target, related_name='target')
+
     author = models.ForeignKey(User)
 
-    tags = models.TextField()
+    tags = models.TextField(default='[]')
 
 
     class Meta:
