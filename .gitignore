@@ -101,3 +101,11 @@ ENV/
 
 # mypy
 .mypy_cache/
+/hotspots/migrations
+/hypothesis/migrations
+/scoring/migrations
+/viewer/migrations
+/hotspots/migrations
+/hypothesis/migrations
+/scoring/migrations
+/viewer/migrations
