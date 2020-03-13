@@ -153,17 +153,20 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ('id', 'username', 'email', 'first_name', 'last_name')
 
 
-class SnapshotSerializer(serializers.ModelSerializer):
-    authorID  = UserSerializer(partial=True)
-    class Meta:
-        model = Snapshot
-        fields = '__all__'
-
 class ProjectSerializer(serializers.ModelSerializer):
-    targetID = TargetSerializer(partial=True)
-    authorID = UserSerializer(partial=True)
+    target = TargetSerializer(partial=True)
+    author = UserSerializer(partial=True)
     class Meta:
         model = Project
+        use_natural_foreign_keys=True,
+        fields = '__all__'
+
+
+class SnapshotSerializer(serializers.ModelSerializer):
+    author  = UserSerializer(partial=True)
+    project  = ProjectSerializer(partial=True)
+    class Meta:
+        model = Snapshot
         use_natural_foreign_keys=True,
         fields = '__all__'
 
