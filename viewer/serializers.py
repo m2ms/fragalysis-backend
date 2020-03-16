@@ -13,25 +13,9 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ('id', 'username', 'email', 'first_name', 'last_name')
 
 
-# GET
-class ProjectReadSerializer(serializers.ModelSerializer):
- #   target = serializers.RelatedField(read_only='True')
-    author = UserSerializer()
-
-    class Meta:
-        model = Project
-        fields = '__all__'
-        depth = 1
-# (POST, PUT, PATCH)
-class ProjectSerializer(serializers.ModelSerializer):
-    project_target = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
-    class Meta:
-        model = Project
-        fields = '__all__'
 
 class TargetSerializer(serializers.ModelSerializer):
     template_protein = serializers.SerializerMethodField()
-    project_id = ProjectReadSerializer(many=True)
     def get_template_protein(self, obj):
         proteins = obj.protein_set.filter()
         for protein in proteins:
@@ -43,6 +27,20 @@ class TargetSerializer(serializers.ModelSerializer):
         model = Target
         fields = '__all__'#("id", "title", "project_id", "protein_set", "template_protein")
 
+# GET
+class ProjectReadSerializer(serializers.ModelSerializer):
+    target = TargetSerializer(read_only=True)
+    author = UserSerializer(read_only=True)
+
+    class Meta:
+        model = Project
+        fields = '__all__'
+
+# (POST, PUT, PATCH)
+class ProjectSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Project
+        fields = '__all__'
 
 class CompoundSerializer(serializers.ModelSerializer):
 

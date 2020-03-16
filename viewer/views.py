@@ -75,11 +75,12 @@ class ProteinPDBBoundInfoView(ISpyBSafeQuerySet):
     filter_fields = ("code", "target_id", "prot_type")
 
 
-class TargetView(#ISpyBSafeQuerySet
-    viewsets.ModelViewSet):
+class TargetView(ISpyBSafeQuerySet
+    #viewsets.ModelViewSet
+    ):
     queryset = Target.objects.all()
     serializer_class = TargetSerializer
-    filter_permissions = "id"
+    filter_permissions = "project_id" #"id"
     filter_fields = '__all__'
    # filter_permissions = "project_id"
    # filter_fields = ("title",)
