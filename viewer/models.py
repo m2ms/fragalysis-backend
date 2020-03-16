@@ -4,6 +4,13 @@ from django.utils import timezone
 
 from loader.config import get_mol_choices, get_prot_choices
 
+class Target_Project(models.Model):
+    id = models.AutoField(primary_key=True)
+    target_id = models.ForeignKey('Target', on_delete=models.CASCADE)
+    project_id = models.ForeignKey('Project', on_delete=models.CASCADE)
+    class Meta:
+        unique_together = ("target_id", "project_id")
+
 class Target(models.Model):
     """A Django model to define a given protein target"""
     # The title of the project_id -> userdefined
@@ -11,7 +18,7 @@ class Target(models.Model):
     # The date it was made
     init_date = models.DateTimeField(auto_now_add=True)
     # A field to link projects and targets together
-    project_id = models.ManyToManyField('Project', related_name='project_target')
+    project_id = models.ManyToManyField('Project', through=Target_Project, related_name='+')
     # Indicates the uniprot_id id for the target. Is a unique key
     uniprot_id = models.CharField(max_length=100, null=True)
 
@@ -51,7 +58,7 @@ class Project(models.Model):
 
     description = models.CharField(max_length=255, default='')
 
-    #target = models.ForeignKey(Target, related_name='target')
+    target = models.ManyToManyField(Target, through=Target_Project)
 
     author = models.ForeignKey(User)
 

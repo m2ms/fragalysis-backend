@@ -15,18 +15,19 @@ class UserSerializer(serializers.ModelSerializer):
 
 # GET
 class ProjectReadSerializer(serializers.ModelSerializer):
-    project_target = serializers.SerializerMethodField()
+ #   target = serializers.RelatedField(read_only='True')
     author = UserSerializer()
+
     class Meta:
         model = Project
-        fields = '__all_'
-
+        fields = '__all__'
+        depth = 1
 # (POST, PUT, PATCH)
 class ProjectSerializer(serializers.ModelSerializer):
     project_target = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
     class Meta:
         model = Project
-        fields = '__all_'
+        fields = '__all__'
 
 class TargetSerializer(serializers.ModelSerializer):
     template_protein = serializers.SerializerMethodField()
