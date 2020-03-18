@@ -2,7 +2,7 @@ from django.contrib.auth.models import User
 from django.db import models
 from django.utils import timezone
 
-from loader.config import get_mol_choices, get_prot_choices
+from loader_backend.config import get_mol_choices, get_prot_choices
 
 class Target(models.Model):
     """A Django model to define a given protein target"""
@@ -31,7 +31,7 @@ class Snapshot(models.Model):
     type = models.CharField(choices=SNAPSHOT_TYPE, default=INIT, max_length=8)
     title = models.CharField(max_length=255)
     author = models.ForeignKey(User)
-    description = models.CharField(max_length=255)
+    description = models.CharField(max_length=255, default='')
     children = models.ManyToManyField('Snapshot' , related_name='+')
     parent = models.ManyToManyField('Snapshot', related_name='+'),
     created = models.DateTimeField(default=timezone.now)
@@ -93,7 +93,7 @@ class Compound(models.Model):
     inchi = models.CharField(max_length=255, unique=True, db_index=True)
     smiles = models.CharField(max_length=255, db_index=True)
     # A link to the related project
-    project_id = models.ManyToManyField(Project)
+    # project_id = models.ManyToManyField(Project)
     # Float attributes
     mol_log_p = models.FloatField()
     mol_wt = models.FloatField()

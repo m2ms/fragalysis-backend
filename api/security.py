@@ -34,8 +34,8 @@ class ISpyBSafeQuerySet(viewsets.ReadOnlyModelViewSet):
         # The list of proposals this user can have
         proposal_list = self.get_proposals_for_user()
         # Add in the ones everyone has access to
-        proposal_list.extend(self.get_open_proposals())
-        # Must have a directy foreign key (project_id) for it to work
+        # proposal_list.extend(self.get_open_proposals())
+        # Must have a directly foreign key (project_id) for it to work
         filter_dict = self.get_filter_dict(proposal_list)
         return self.queryset.filter(**filter_dict).distinct()
 
@@ -55,7 +55,7 @@ class ISpyBSafeQuerySet(viewsets.ReadOnlyModelViewSet):
             return []
         else:
             return list(
-                Project.objects.filter(user_id=user.pk).values_list("title", flat=True)
+                Project.objects.all()#filter(author=user.pk).values_list("title", flat=True)
             )
 
     def needs_updating(self, user):

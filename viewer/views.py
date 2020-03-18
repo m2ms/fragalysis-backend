@@ -75,21 +75,17 @@ class ProteinPDBBoundInfoView(ISpyBSafeQuerySet):
     filter_fields = ("code", "target_id", "prot_type")
 
 
-class TargetView(ISpyBSafeQuerySet
-    #viewsets.ModelViewSet
-    ):
-    queryset = Target.objects.all()
+class TargetView(ISpyBSafeQuerySet):
+    queryset = Target.objects.filter()
     serializer_class = TargetSerializer
-    filter_permissions = "project_id" #"id"
-    filter_fields = '__all__'
-   # filter_permissions = "project_id"
-   # filter_fields = ("title",)
+    filter_permissions = "id"
+    filter_fields = ("title",)
 
 
 class MoleculeView(ISpyBSafeQuerySet):
     queryset = Molecule.objects.filter()
     serializer_class = MoleculeSerializer
-    filter_permissions = "prot_id__target_id__project_id"
+    filter_permissions = "prot_id__target_id"
     filter_fields = (
         "prot_id",
         "cmpd_id",
@@ -191,9 +187,9 @@ def get_open_targets(request):
     target_ids = []
 
     for t in targets:
-        for p in t.project_id.all():
-            if 'OPEN' in p.title:
-                target_names.append(t.title)
-                target_ids.append(t.id)
+        # for p in t.project_id.all():
+        #     if 'OPEN' in p.title:
+        target_names.append(t.title)
+        target_ids.append(t.id)
 
     return HttpResponse(json.dumps({'target_names': target_names, 'target_ids': target_ids}))
