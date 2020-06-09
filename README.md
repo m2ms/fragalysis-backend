@@ -77,6 +77,7 @@ mkdir -p data/neo4j/data
 mkdir -p data/neo4j/logs
 mkdir -p data/stack/media
 mkdir -p data/stack/logs
+mkdir -p data/media/compound_sets
 ```
 **4.Populating database** 
 
