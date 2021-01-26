@@ -1,7 +1,8 @@
 import os
 from frag.network.decorate import get_3d_vects_for_mol, get_vect_indices_for_mol
 from frag.network.query import get_full_graph
-from rest_framework import serializers
+#L+
+from urllib.parse import urljoin
 
 from api.utils import draw_mol
 
@@ -26,6 +27,8 @@ from viewer.models import (
 )
 
 from django.contrib.auth.models import User
+#L+
+from django.conf import settings
 
 from rest_framework import serializers
 
@@ -35,9 +38,10 @@ class FileSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
-
 class TargetSerializer(serializers.ModelSerializer):
     template_protein = serializers.SerializerMethodField()
+    zip_archive = serializers.SerializerMethodField()
+    metadata = serializers.SerializerMethodField()
 
     def get_template_protein(self, obj):
         proteins = obj.protein_set.filter()
@@ -45,6 +49,31 @@ class TargetSerializer(serializers.ModelSerializer):
             if protein.pdb_info:
                 return protein.pdb_info.url
         return "NOT AVAILABLE"
+
+    def get_zip_archive(self, obj):
+        request = self.context["request"]
+        # This is to map links to HTTPS to avoid Mixed Content warnings from Chrome browsers
+        # SECURE_PROXY_SSL_HEADER is referenced because it is used in redirecting URLs - if
+        # it is changed it may affect this code.
+        # Using relative links will probably also work, but This workaround allows both the
+        # 'download structures' button and the DRF API call to work.
+        # The if-check is because the filefield in target has null=True.
+        # Note that this link will not work on local
+        https_host = settings.SECURE_PROXY_SSL_HEADER[1] + '://' + request.get_host()
+        if hasattr(obj, 'zip_archive') and obj.zip_archive.name:
+            return urljoin(https_host, obj.zip_archive.url)
+        else:
+            return
+
+    def get_metadata(self, obj):
+        request = self.context["request"]
+        # This is to map links to HTTPS to avoid Mixed Content warnings from Chrome browsers
+        # See above for details.
+        https_host = settings.SECURE_PROXY_SSL_HEADER[1] + '://' + request.get_host()
+        if hasattr(obj, 'metadata') and obj.metadata.name:
+            return urljoin(https_host, obj.metadata.url)
+        else:
+            return
 
     class Meta:
         model = Target
