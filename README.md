@@ -143,7 +143,8 @@ It is important to have key in following format (with `-`)
 `f8c4ea0f-6b81-46d0-b85a-3601135756bc` 
 
 #### Upload page
-Visit `localhost:8080/viewer/upload_cset`
+Visit `localhost:8080/viewer/upload_cset` - for computed sets
+Visit `localhost:8080/viewer/upload_tset` - for targets
 
 The target name is for example `Mpro`, select `sdf` file and you don't need a `pdb` file. 
 Before upload generate upload key.
