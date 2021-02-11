@@ -16,6 +16,7 @@ import sentry_sdk
 from sentry_sdk.integrations.django import DjangoIntegration
 from sentry_sdk.integrations.celery import CeleryIntegration
 from sentry_sdk.integrations.redis import RedisIntegration
+from sentry_sdk.integrations.excepthook import ExcepthookIntegration
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
@@ -38,7 +39,7 @@ if DEBUG is False and SENTRY_DNS:
     # By default only call sentry in staging/production
     sentry_sdk.init(
         dsn=SENTRY_DNS,
-        integrations=[DjangoIntegration(), CeleryIntegration(), RedisIntegration()],
+        integrations=[DjangoIntegration(), CeleryIntegration(), RedisIntegration(), ExcepthookIntegration(always_run=True)],
 
         # If you wish to associate users to errors (assuming you are using
         # django.contrib.auth) you may enable sending PII data.
@@ -67,7 +68,7 @@ ALLOWED_HOSTS = ["*"]
 REST_FRAMEWORK = {
     "DEFAULT_FILTER_BACKENDS": ("django_filters.rest_framework.DjangoFilterBackend",),
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.LimitOffsetPagination",
-    "PAGE_SIZE": 1000,
+    "PAGE_SIZE": 5000,
     "DEFAULT_VERSIONING_CLASS": "rest_framework.versioning.QueryParameterVersioning",
 }
 
@@ -265,10 +266,17 @@ CAS_CHECK_NEXT = lambda _: True
 
 # DOCS_ROOT = "/code/docs/_build/html "
 
-# This is set up for logging in development probably good to switch off in staging/prod as sentry should deal with errors.
-# Hence connection to DEBUG flag.
+# Discourse settings for API calls to Discourse Platform
+DISCOURSE_PARENT_CATEGORY = 'Fragalysis targets'
+DISCOURSE_USER = 'fragalysis'
+DISCOURSE_HOST = os.environ.get('DISCOURSE_HOST', 'https://discourse.xchem-dev.diamond.ac.uk/')
+# Note that this can be obtained from discourse for the dev environment.
+DISCOURSE_API_KEY = os.environ.get("DISCOURSE_API_KEY")
+
+# This is set up for logging in development probably good to switch off in staging/prod as sentry should deal with
+# errors. Hence connection to DEBUG flag.
 # Note that in development you have to jump on to docker and then look for logs/logfile.
-if DEBUG == True:
+if DEBUG is True:
     LOGGING = {
         'version': 1,
         'disable_existing_loggers': False,
@@ -278,18 +286,18 @@ if DEBUG == True:
                 'class': 'logging.StreamHandler',
             },
             'logfile': {
-                'level':'DEBUG',
-                'class':'logging.FileHandler',
+                'level': 'DEBUG',
+                'class': 'logging.FileHandler',
                 'filename': BASE_DIR + "/logs/logfile.log",
             },
         },
-        # 'loggers': {
-        #     'celery': {
-        #         'handlers': ['celery'],
-        #         'level': 'INFO',
-        #         'propagate': False
-        #     },
-        # },
+        'loggers': {
+            'celery': {
+                'handlers': ['celery'],
+                'level': 'INFO',
+                'propagate': False
+            },
+        },
         'root': {
             'level': 'INFO',
             'handlers': ['console', 'logfile']

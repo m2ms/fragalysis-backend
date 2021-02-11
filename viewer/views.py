@@ -2,7 +2,8 @@ import json
 import os
 import zipfile
 from io import StringIO
-
+import pandas as pd
+import uuid
 # import the logging library
 import logging
 # Get an instance of a logger
@@ -14,13 +15,14 @@ from django.shortcuts import render
 from rest_framework import viewsets
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
+from django.core.mail import send_mail
 from django.conf import settings
 from django.http import JsonResponse
-from django.contrib.auth.decorators import login_required
 
 from rest_framework.parsers import JSONParser, BaseParser
 from rest_framework.exceptions import ParseError
 from rest_framework.views import APIView
+from rest_framework.response import Response
 
 from django.views import View
 
@@ -50,8 +52,8 @@ from viewer import filters
 from .forms import CSetForm, UploadKeyForm, CSetUpdateForm, TSetForm
 
 from .tasks import *
+from .discourse import create_discourse_post, list_discourse_posts_for_topic
 
-import pandas as pd
 
 from viewer.serializers import (
     MoleculeSerializer,
@@ -79,6 +81,7 @@ from viewer.serializers import (
     ScoreDescriptionSerializer,
     TextScoreSerializer,
     ComputedMolAndScoreSerializer,
+    DiscoursePostWriteSerializer
 )
 
 
@@ -129,35 +132,57 @@ class GraphView(ISpyBSafeQuerySet):
         .. code-block:: javascript
 
             "results": [
-            {
-                "id": 13684,
-                "graph": {
-                    "COc1ccc(CC(=O)Nc2cc(Cl)cc([Xe])c2)cc1_1_ADDITION": {
-                        "vector": "COC1CCC(CC(O)NC2CC(Cl)CC([103Xe])C2)CC1",
-                        "addition": [
-                            {
-                                "change": "F[103Xe]",
-                                "end": "COc1ccc(CC(=O)Nc2cc(F)cc(Cl)c2)cc1"
-                            },
-                            {
-                                "change": "Cl[104Xe]",
-                                "end": "COc1ccc(CC(=O)Nc2cc(Cl)cc(Cl)c2)cc1"
-                            },
-                            {
-                                "change": "Cl[103Xe]",
-                                "end": "COc1ccc(CC(=O)Nc2cc(Cl)cc(Cl)c2)cc1"
-                            },
-                            {
-                                "change": "OC(O)[104Xe]",
-                                "end": "COc1ccc(CC(=O)Nc2cc(Cl)cc(C(=O)O)c2)cc1"
-                            },
-                            {
-                                "change": "Br[104Xe]",
-                                "end": "COc1ccc(CC(=O)Nc2cc(Cl)cc(Br)c2)cc1"
-                            }
-                        ]
-                    },]
-
+                {
+                    "id": 385,
+                    "graph": {
+                        "CC(=O)Nc1cnccc1[Xe]_1_DELETION": {
+                            "vector": "CC(O)NC1CCCCC1[101Xe]",
+                            "addition": [
+                                {
+                                    "change": "C[101Xe]",
+                                    "end": "CC(=O)Nc1cccnc1",
+                                    "compound_ids": [
+                                        "REAL:PV-001793547821",
+                                        "MOLPORT:000-165-661"
+                                    ]
+                                }
+                            ]
+                        },
+                        "C[Xe].NC(=O)C[Xe]_2_LINKER": {
+                            "vector": "C[101Xe].NC(O)C[100Xe]",
+                            "addition": [
+                                {
+                                    "change": "CNC1CC([100Xe])C(O)C1[101Xe]",
+                                    "end": "CN=C1SC(CC(N)=O)C(=O)N1C",
+                                    "compound_ids": [
+                                        "MOLPORT:000-680-640"
+                                    ]
+                                },
+                                {
+                                    "change": "[100Xe]C1CCCCC1[101Xe]",
+                                    "end": "CC1CCCCN1CC(N)=O",
+                                    "compound_ids": [
+                                        "REAL:Z54751033",
+                                        "MOLPORT:001-599-191"
+                                    ]
+                                }
+                            ]
+                        },
+                        "Cc1ccnc(Cl)c1[Xe]_2_REPLACE": {
+                            "vector": "CC1CCCC(Cl)C1[100Xe]",
+                            "addition": [
+                                {
+                                    "change": "CC(O)N[100Xe]",
+                                    "end": "Cc1ccnc(Cl)c1",
+                                    "compound_ids": [
+                                        "MOLPORT:000-140-635"
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                }
+        ]
     """
     queryset = Molecule.objects.filter()
     serializer_class = GraphSerializer
@@ -586,9 +611,6 @@ def cset_key(request):
         new_key.save()
         key_value = new_key.uuid
 
-        from django.core.mail import send_mail
-        from django.conf import settings
-
         subject = 'Fragalysis: upload compound set key'
         message = 'Your upload key is: ' + str(
             key_value) + ' store it somewhere safe. Only one key will be issued per user'
@@ -606,31 +628,41 @@ def save_pdb_zip(pdb_file):
     zf = zipfile.ZipFile(pdb_file)
     zip_lst = zf.namelist()
     zfile = {}
-
+    zfile_hashvals = {}
+    print(zip_lst)
     for filename in zip_lst:
         # only handle pdb files
         if filename.split('.')[-1] == 'pdb':
+            f = filename.split('/')[0]
+            save_path = os.path.join(settings.MEDIA_ROOT, 'tmp', f)
+            if default_storage.exists(f):
+                rand_str = uuid.uuid4().hex
+                pdb_path = default_storage.save(save_path.replace('.pdb', f'-{rand_str}.pdb'), ContentFile(zf.read(filename)))
             # Test if Protein object already exists
-            test_pdb_code = filename.split('/')[-1].replace('.pdb', '')
-            test_prot_objs = Protein.objects.filter(code=test_pdb_code)
-
-            # If no prot obj found then save to tmp/ file and link pdb_code with
-            # pdb_path in dict
-            if len(test_prot_objs) == 0:
-                # Save pdb file in /tmp folder
-                pdb_path = default_storage.save('tmp/' + filename.split('/')[-1],
-                                                ContentFile(zf.read(filename)))
-                zfile[test_pdb_code] = pdb_path
-
-            # If prot object/s exist then update dict with pdb path
-            if len(test_prot_objs) != 0:
-                zfile[test_pdb_code] = str(test_prot_objs[0].pdb_info)
+            # code = filename.split('/')[-1].replace('.pdb', '')
+            # test_pdb_code = filename.split('/')[-1].replace('.pdb', '')
+            # test_prot_objs = Protein.objects.filter(code=test_pdb_code)
+            #
+            # if len(test_prot_objs) > 0:
+            #     # make a unique pdb code as not to overwrite existing object
+            #     rand_str = uuid.uuid4().hex
+            #     test_pdb_code = f'{code}#{rand_str}'
+            #     zfile_hashvals[code] = rand_str
+            #
+            # fn = test_pdb_code + '.pdb'
+            #
+            # pdb_path = default_storage.save('tmp/' + fn,
+            #                                 ContentFile(zf.read(filename)))
+            else:
+                pdb_path = default_storage.save(save_path, ContentFile(zf.read(filename)))
+            test_pdb_code = pdb_path.split('/')[-1].replace('.pdb', '')
+            zfile[test_pdb_code] = pdb_path
 
     # Close the zip file
     if zf:
         zf.close()
 
-    return zfile
+    return zfile, zfile_hashvals
 
 
 def save_tmp_file(myfile):
@@ -696,7 +728,7 @@ class UpdateCSet(View):
 
             # if there is a zip file of pdbs, check it for .pdb files, and ignore others
             if pdb_file:
-                zfile = save_pdb_zip(pdb_file)
+                zfile, zfile_hashvals = save_pdb_zip(pdb_file)
 
             # save uploaded sdf to tmp storage
             tmp_file = save_tmp_file(myfile)
@@ -753,8 +785,10 @@ class UploadCSet(View):
         return render(request, 'viewer/upload-cset.html', {'form': form, 'sets': existing_sets})
 
     def post(self, request):
+
         check_services()
         zfile = None
+        zfile_hashvals = None
         zf = None
         cset = None
         form = CSetForm(request.POST, request.FILES)
@@ -782,18 +816,17 @@ class UploadCSet(View):
             else:
                 pdb_file = None
 
-            # if there is a zip file of pdbs, check it for .pdb files, and ignore others
+            # save uploaded sdf and zip to tmp storage
+            tmp_sdf_file = save_tmp_file(myfile)
             if pdb_file:
-
-                zfile = save_pdb_zip(pdb_file)
-
-            # save uploaded sdf to tmp storage
-            tmp_file = save_tmp_file(myfile)
+                tmp_pdb_file = save_tmp_file(pdb_file)
+            else:
+                tmp_pdb_file = None
 
             # Settings for if validate option selected
             if str(choice) == '0':
                 # Start celery task
-                task_validate = validate_compound_set.delay(tmp_file, target=target, zfile=zfile, update=update_set)
+                task_validate = validate_compound_set.delay(tmp_sdf_file, target=target, zfile=tmp_pdb_file, update=update_set)
 
                 context = {}
                 context['validate_task_id'] = task_validate.id
@@ -807,7 +840,7 @@ class UploadCSet(View):
                 # Start chained celery tasks. NB first function passes tuple
                 # to second function - see tasks.py
                 task_upload = (
-                            validate_compound_set.s(tmp_file, target=target, zfile=zfile, update=update_set) | process_compound_set.s()).apply_async()
+                            validate_compound_set.s(tmp_sdf_file, target=target, zfile=tmp_pdb_file, update=update_set) | process_compound_set.s()).apply_async()
 
                 context = {}
                 context['upload_task_id'] = task_upload.id
@@ -851,11 +884,6 @@ class UploadTSet(View):
 
     def get(self, request):
 
-        form = TSetForm()
-        #TODO replace with target sets based on the projects the user is entiled to see or "OPEN"
-        # test = TargetView().get_queryset(request=request)
-        # targets = request.get('/api/targets/')
-
         # Only authenticated users can upload files - this can be switched off in settings.py.
         user = self.request.user
         if not user.is_authenticated and settings.AUTHENTICATE_UPLOAD:
@@ -864,6 +892,12 @@ class UploadTSet(View):
                 = 'Only authenticated users can upload files - please navigate to landing page and Login'
             logger.info('- UploadTSet.get - authentication error')
             return render(request, 'viewer/upload-tset.html', context)
+
+        contact_email = ''
+        if user.is_authenticated and settings.AUTHENTICATE_UPLOAD:
+            contact_email = user.email
+
+        form = TSetForm(initial={'contact_email': contact_email})
 
         return render(request, 'viewer/upload-tset.html', {'form': form})
 
@@ -888,6 +922,7 @@ class UploadTSet(View):
             target_name = request.POST['target_name']
             choice = request.POST['submit_choice']
             proposal_ref = request.POST['proposal_ref']
+            contact_email = request.POST['contact_email']
 
             # Create /code/media/tmp if does not exist
             media_root = settings.MEDIA_ROOT
@@ -901,7 +936,8 @@ class UploadTSet(View):
             # Settings for if validate option selected
             if str(choice) == '0':
                 # Start celery task
-                task_validate = validate_target_set.delay(new_data_file, target=target_name, proposal=proposal_ref)
+                task_validate = validate_target_set.delay(new_data_file, target=target_name, proposal=proposal_ref,
+                                                          email=contact_email)
 
                 context = {}
                 context['validate_task_id'] = task_validate.id
@@ -915,7 +951,8 @@ class UploadTSet(View):
             if str(choice) == '1':
                 # Start chained celery tasks. NB first function passes tuple
                 # to second function - see tasks.py
-                task_upload = (validate_target_set.s(new_data_file, target=target_name, proposal=proposal_ref) | process_target_set.s()).apply_async()
+                task_upload = (validate_target_set.s(new_data_file, target=target_name, proposal=proposal_ref,
+                                                     email=contact_email) | process_target_set.s()).apply_async()
 
                 context = {}
                 context['upload_task_id'] = task_upload.id
@@ -930,7 +967,46 @@ class UploadTSet(View):
         logger.info('- UploadTSet.post')
         return render(request, 'viewer/upload-tset.html', context)
 
+
 # End Upload Target datasets functions
+def email_task_completion(contact_email, message_type, target_name, target_path=None, task_id=None):
+    """ Notifiy user of upload completion
+    """
+
+    logger.info('+ email_notify_task_completion: ' + message_type + ' ' + target_name)
+    error = False
+    if contact_email == '':
+        return error
+    if message_type == 'upload-success':
+        subject = 'Fragalysis: Target: '+target_name+' Uploaded'
+        message = 'The upload of your target data is complete. Your target is available at: ' \
+                  + str(target_path)
+    elif message_type == 'validate-success':
+        subject = 'Fragalysis: Target: '+target_name+' Validation'
+        message = 'Your data was validated. It can now be uploaded using the upload option.'
+    else:
+        # Validation failure
+        subject = 'Fragalysis: Target: ' + target_name + ' Validation/Upload Failed'
+        message = 'The validation/upload of your target data did not complete successfully. ' \
+                  'Please navigate the following link to check the errors: validate_task/' + str(task_id)
+
+    email_from = settings.EMAIL_HOST_USER
+    recipient_list = [contact_email, ]
+    if email_from:
+        logger.info('+ email_notify_task_completion email_from: ' + email_from )
+    logger.info('+ email_notify_task_completion subject: ' + subject )
+    logger.info('+ email_notify_task_completion message: ' + message )
+    logger.info('+ email_notify_task_completion contact_email: ' + contact_email )
+
+    # Send email - this should not prevent returning to the screen in the case of error.
+    try:
+        send_mail(subject, message, email_from, recipient_list)
+    except:
+        error = True
+
+    logger.info('- email_notify_task_completion')
+    return error
+
 
 # Task functions common between Compound Sets and Target Set pages.
 class ValidateTaskView(View):
@@ -991,11 +1067,17 @@ class ValidateTaskView(View):
             logger.info('+ ValidateTaskView.get.SUCCESS')
             results = task.get()
             # NB get tuple from validate task
-            validate_dict = results[1]
-            validated = results[2]
+            process_type = results[1]
+            validate_dict = results[2]
+            validated = results[3]
             if validated:
                 response_data['html'] = 'Your data was validated. \n It can now be uploaded using the upload option.'
                 response_data['validated'] = 'Validated'
+
+                if process_type== 'tset':
+                    target_name = results[5]
+                    contact_email = results[8]
+                    email_task_completion(contact_email, 'validate-success', target_name)
 
                 return JsonResponse(response_data)
 
@@ -1009,6 +1091,10 @@ class ValidateTaskView(View):
 
                 response_data["html"] = html_table
                 response_data['validated'] = 'Not validated'
+                if process_type== 'tset':
+                    target_name = results[5]
+                    contact_email = results[8]
+                    email_task_completion(contact_email, 'validate-failure', target_name, task_id=validate_task_id)
 
                 return JsonResponse(response_data)
 
@@ -1115,8 +1201,7 @@ class UploadTaskView(View):
 
                     # set pandas options to display all column data
                     pd.set_option('display.max_colwidth', -1)
-
-                    table = pd.DataFrame.from_dict(validate_dict)
+                    table = pd.DataFrame.from_dict(results[2])
                     html_table = table.to_html()
                     html_table += '''<p> Your data was <b>not</b> validated. The table above shows errors</p>'''
 
@@ -1130,8 +1215,12 @@ class UploadTaskView(View):
                     response_data['validated'] = 'Validated'
                     if results[1] == 'tset':
                         target_name = results[2]
+                        contact_email = results[5]
+                        target_path = '/viewer/target/%s' % target_name
                         response_data['results'] = {}
-                        response_data['results']['tset_download_url'] = '/viewer/target/%s' % target_name
+                        response_data['results']['tset_download_url'] = target_path
+                        logger.info('+ UploadTaskView.get.success -email:'+contact_email)
+                        email_task_completion(contact_email, 'upload-success', target_name, target_path=target_path)
                     else:
                         cset_name = results[2]
                         cset = ComputedSet.objects.get(name=cset_name)
@@ -2006,7 +2095,8 @@ class ComputedMolAndScoreView(viewsets.ReadOnlyModelViewSet):
         - compound: id for the associated 2D compound
         - computed_set: name for the associated computed set
         - computed_inspirations: list of ids for the inspirations used in the design/computation of the molecule
-        - numerical_scores: dict of numerical scores, where each key is a score name, and each value is the associated score
+        - numerical_scores: dict of numerical scores, where each key is a score name, and each value is the associated
+        score
         - text_scores: dict of text scores, where each key is a score name, and each value is the associated score
 
     example output:
@@ -2036,3 +2126,166 @@ class ComputedMolAndScoreView(viewsets.ReadOnlyModelViewSet):
     serializer_class = ComputedMolAndScoreSerializer
     filter_permissions = "project_id"
     filter_fields = ('computed_set',)
+
+
+class DiscoursePostView(viewsets.ViewSet):
+    """Django view to post get and post to the Discourse platform
+
+    Methods
+    -------
+    allowed requests:
+        - POST: Takes a post and calls a function to post the details to the Discourse platform.
+        - GET: (No yet fully operational - returns posts for ?post_title=<topic title>
+    url:
+       api/discourse_post
+    params:
+        - category_name: sub category_name for Discourse post (optional if post title is given)
+        - parent_category: Discourse parent_category name - defaults to "fragalysis targets" (Setting)
+        - category_colour: Optional - defaults to '0088CC'
+        - category_text_colour: Optional defaults to 'FFFFFF'
+        - post_title: title of topic or post (optional if category name is given)
+        - post_content: content of the post
+        - post_tags: a JSON string of tags related to the Post
+
+    Returns
+    -------
+
+    example output (POST):
+        Response with a URL linking to the post that has just been created
+
+          {
+                "Post url": "https://discourse.xchem-dev.diamond.ac.uk/t/78/1"
+          }
+
+    example output (GET):
+        Response with a list of posts
+
+        {
+            "Posts": {
+                "post_stream": {
+                    "posts": [
+                        {
+                            "id": 131,
+                            "name": "user",
+                            "username": "user",
+                            "avatar_template": "/letter_avatar_proxy/v4/letter/u/c0e974/{size}.png",
+                            "created_at": "2020-12-10T14:50:56.006Z",
+                            "cooked": "<p>This is a post for session-project 0005 to test if it works without parent category</p>",
+                            "post_number": 1,
+                            "post_type": 1,
+                            "updated_at": "2020-12-10T14:50:56.006Z",
+                            "reply_count": 0,
+                            "reply_to_post_number": null,
+                            "quote_count": 0,
+                            "incoming_link_count": 1,
+                            "reads": 1,
+                            "readers_count": 0,
+                            "score": 5.2,
+                            "yours": true,
+                            "topic_id": 81,
+                            "topic_slug": "api-test-session-project-000005",
+                            "display_username": "user",
+                            "primary_group_name": null,
+                            "primary_group_flair_url": null,
+                            "primary_group_flair_bg_color": null,
+                            "primary_group_flair_color": null,
+                            "version": 1,
+                            "can_edit": true,
+                            "can_delete": false,
+                            "can_recover": false,
+                            "can_wiki": true,
+                            "read": true,
+                            "user_title": null,
+                            "actions_summary": [
+                                {
+                                    "id": 3,
+                                    "can_act": true
+                                },
+                                {
+                                    "id": 4,
+                                    "can_act": true
+                                },
+                                {
+                                    "id": 8,
+                                    "can_act": true
+                                },
+                                {
+                                    "id": 7,
+                                    "can_act": true
+                                }
+                            ],
+                            "moderator": false,
+                            "admin": true,
+                            "staff": true,
+                            "user_id": 1,
+                            "hidden": false,
+                            "trust_level": 1,
+                            "deleted_at": null,
+                            "user_deleted": false,
+                            "edit_reason": null,
+                            "can_view_edit_history": true,
+                            "wiki": false,
+                            "reviewable_id": 0,
+                            "reviewable_score_count": 0,
+                            "reviewable_score_pending_count": 0
+                        }
+                    ]
+                },
+                "id": 81
+            }
+        }
+    """
+
+    serializer_class = DiscoursePostWriteSerializer
+
+    def create(self, request):
+        """Method to handle POST request and call discourse to create the post
+        """
+        logger.info('+ DiscoursePostView.post')
+        data = request.data
+
+        logger.info('+ DiscoursePostView.post'+json.dumps(data))
+        if data['category_name'] == '':
+            category_details = None
+        else:
+            category_details = {'category_name': data['category_name'],
+                                'parent_name': data['parent_category_name'],
+                                'category_colour': data['category_colour'],
+                                'category_text_colour': data['category_text_colour']}
+
+        if data['post_title'] == '':
+            post_details = None
+        else:
+            post_details = {'title': data['post_title'],
+                            'content': data['post_content'],
+                            'tags': json.loads(data['post_tags'])}
+
+        error, post_url = create_discourse_post(request.user, category_details, post_details)
+
+        logger.info('- DiscoursePostView.post')
+        if error:
+            return Response({"message": "Error Creating Post"})
+        else:
+            return Response({"Post url": post_url})
+
+    def list(self, request):
+        """Method to handle GET request and call discourse to list posts for a topic
+        """
+        logger.info('+ DiscoursePostView.get')
+        query_params = request.query_params
+        logger.info('+ DiscoursePostView.get'+json.dumps(query_params))
+
+        discourse_api_key = settings.DISCOURSE_API_KEY
+
+        if discourse_api_key:
+            post_title = request.query_params.get('post_title', None)
+            error, posts = list_discourse_posts_for_topic(post_title)
+        else:
+            logger.info('- DiscoursePostView.no key')
+            return Response({"message": "Discourse Not Available - No API key supplied"})
+
+        logger.info('- DiscoursePostView.get')
+        if error:
+            return Response({"message": "No Posts Found"})
+        else:
+            return Response({"Posts": posts})

@@ -69,7 +69,9 @@ def check_refmol(mol, validate_dict, target=None):
     if target:
         refmols = mol.GetProp('ref_mols').split(',')
         for ref in refmols:
-            query = Protein.objects.filter(code__contains=target + '-' + ref.strip().split('_')[0])
+            query = Protein.objects.filter(code__contains=target + '-' + ref.strip().split(':')[0].split('_')[0])
+            if len(query) == 0:
+                query = Protein.objects.filter(code__contains=target + '-' + ref.strip().split(':')[0].split('_')[0])
             if len(query)==0:
                 validate_dict = add_warning(molecule_name=mol.GetProp('_Name'),
                                             field='ref_mol',
@@ -91,11 +93,11 @@ def check_pdb(mol, validate_dict, target=None, zfile=None):
     # Check if pdb filename given and exists
     if zfile:
         pdb_code = pdb_fn.replace('.pdb','')
-        if pdb_code not in zfile:
-            validate_dict = add_warning(molecule_name=mol.GetProp('_Name'),
-                                        field='ref_pdb',
-                                        warning_string="path " + str(pdb_fn) + " can't be found in uploaded zip file",
-                                        validate_dict=validate_dict)
+        # if pdb_code not in zfile:
+        #     validate_dict = add_warning(molecule_name=mol.GetProp('_Name'),
+        #                                 field='ref_pdb',
+        #                                 warning_string="path " + str(pdb_fn) + " can't be found in uploaded zip file",
+        #                                 validate_dict=validate_dict)
 
     # Custom pdb added but no zfile - double check if pdb does exist before throwing error
     if pdb_fn.endswith(".pdb") and not zfile:
@@ -106,7 +108,7 @@ def check_pdb(mol, validate_dict, target=None, zfile=None):
 
     # If anything else given example x1408
     if target and not pdb_fn.endswith(".pdb"):
-        query = Protein.objects.filter(code__contains=str(target + '-' + pdb_fn.split('_')[0]))
+        query = Protein.objects.filter(code__contains=str(target + '-' + pdb_fn.split(':')[0].split('_')[0]))
         if len(query)==0:
             validate_dict = add_warning(molecule_name=mol.GetProp('_Name'),
                                         field='ref_pdb',

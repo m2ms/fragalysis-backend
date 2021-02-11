@@ -1,9 +1,9 @@
+import uuid
 from django.contrib.auth.models import User
 from django.db import models
 from django.utils import timezone
 from django.core.serializers.json import DjangoJSONEncoder
-import uuid
-import json
+from django.core.validators import MinLengthValidator
 
 
 from simple_history.models import HistoricalRecords
@@ -183,7 +183,7 @@ class Compound(models.Model):
     """
 
     # Character attributes
-    inchi = models.CharField(max_length=255, unique=True, db_index=True)
+    inchi = models.CharField(max_length=255, unique=False, db_index=True)
     long_inchi = models.TextField(max_length=1000, blank=True, null=True)
     smiles = models.CharField(max_length=255, db_index=True)
     current_identifier = models.CharField(max_length=255, db_index=True, blank=True, null=True)
@@ -208,6 +208,9 @@ class Compound(models.Model):
     inspirations = models.ManyToManyField("Molecule", blank=True, null=True)
     description = models.TextField(blank=True, null=True)
     comments = models.TextField(blank=True, null=True)
+
+    class Meta:
+        unique_together = ('inchi', 'long_inchi')
 
 
 class Molecule(models.Model):
@@ -676,10 +679,18 @@ class ComputedMolecule(models.Model):
     name = models.CharField(max_length=50)
     # calculated smiles
     smiles = models.CharField(max_length=255)
+    pdb = models.ForeignKey(Protein, on_delete=models.PROTECT, null=True)
     # the protein link
-    pdb_info = models.FileField(upload_to="pdbs/", null=False, max_length=255)
+    # pdb_info = models.FileField(upload_to="pdbs/", null=False, max_length=255)
     # if we use our own method of calculating them
     computed_inspirations = models.ManyToManyField(Molecule, null=True, blank=True)
+
+    # @property
+    # def pdb_info(self):
+    #     if self.pdb:
+    #         return self.pdb.pdb_info
+    #     else:
+    #         return None
 
 
 class ScoreDescription(models.Model):
@@ -740,11 +751,56 @@ class TextScoreValues(models.Model):
     value = models.TextField(max_length=500, null=False)
     # the compound this score relates to
     compound = models.ForeignKey(ComputedMolecule, on_delete=models.CASCADE)
-
-
 # End of compound sets
+
+
 class File(models.Model):
     file = models.FileField(blank=False, null=False)
 
     def __str__(self):
         return self.file.name
+
+
+# Start of Discourse Translation Tables
+class DiscourseCategory(models.Model):
+    """Django model for holding Discourse Subcategory references for Fragalysis - initially Targets
+
+    Parameters
+    ----------
+    category_name: CharField
+        The name of the (sub)category within Discourse. It must be unique within Discourse
+    author: ForeignKey
+        A link to the user that created the category
+    discourse_category_id: IntegerField
+        The Discourse category_id returned when the category was created. Used when creating new topics.
+
+    """
+    category_name = models.CharField(max_length=200, unique=True)
+    author = models.ForeignKey(User, null=True, on_delete=models.CASCADE)
+    discourse_category_id = models.IntegerField()
+
+    class Meta:
+        db_table = 'viewer_discoursecategory'
+
+
+class DiscourseTopic(models.Model):
+    """Django model for holding Discourse Topic references for Fragalysis - initially Targets
+
+    Parameters
+    ----------
+    topic_title: CharField
+        The title of the sub)category within Discourse. It must be unique within Discourse.
+    author: ForeignKey
+        A link to the user that created the category
+    discourse_topic_id: IntegerField
+        The Discourse topic_id returned when the topic was created. Used when creating new posts for topics.
+
+    """
+    topic_title = models.CharField(max_length=200, unique=True,
+                                   validators=
+                                   [MinLengthValidator(15,'Discourse Topic Title must be longer than 15 characters')])
+    author = models.ForeignKey(User, null=True, on_delete=models.CASCADE)
+    discourse_topic_id = models.IntegerField()
+
+    class Meta:
+        db_table = 'viewer_discoursetopic'
