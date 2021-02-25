@@ -7,7 +7,7 @@ functions.py
 """
 import sys, json, os, glob, shutil
 from django.contrib.auth.models import User
-from viewer.models import Target, Protein, Molecule, Compound, Project
+from viewer.models import Target, Protein, Molecule, Compound, Project, ComputedMolecule
 from hypothesis.models import (
     Vector3D,
     Vector,
@@ -480,7 +480,11 @@ def remove_not_added(target, xtal_list):
     :return: None
     """
     all_prots = Protein.objects.filter(target_id=target)
-    for prot in all_prots:
+    # make sure not to delete any of the computed set proteins (which are protected)
+    computed_prots = [mol.pdb for mol in ComputedMolecule.objects.filter(pdb__target_id=target)] 
+    unprotected = [x for x in all_prots if x not in computed_prots] 
+    
+    for prot in unprotected:
         # Code consists of 'directory:alternate_name' if exists (code is renamed based on the metadata)
         code_first_part = prot.code.split(":")[0]
         if code_first_part not in xtal_list:
@@ -620,7 +624,7 @@ def get_vectors(mols):
     vect_types = VectTypes()
     for mol in mols:
         if "." in mol.smiles:
-            print("SKIPPING - FRAGMENT: " + str(mol.pk)) + " " + str(mol.smiles)
+            print("SKIPPING - FRAGMENT: " + str(mol.smiles))
             continue
         vectors = get_3d_vects_for_mol(mol.sdf_info)
         for vect_type in vectors:
